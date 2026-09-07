@@ -1,163 +1,169 @@
-# KeyLab mk3 — skærm-sysex, LED og CC
+# Arturia KeyLab mk3 — screen SysEx, LEDs and CC
 
-Gælder både 61 og 88; kun MIDI-portnavnet adskiller dem.
+Reverse-engineered notes for the KeyLab 61/88 mk3. Applies to both sizes; only
+the MIDI port name differs. This is **not** official documentation and is not
+endorsed by Arturia.
 
-Kortlagt 27.-28. august 2026, udvidet 4.-5. september, gennemgået mod
-produktionskoden 6. september 2026. Kilder: Arturias `config.lua`
-(MainStage-script), MIDI-log fra Analog Lab, målinger direkte på hardware,
-og de to Max for Live-filer der driver riggen (`keylab_arm.js`,
-`keylab_list_arr.js`).
+Mapped 27-28 August 2026, extended 4-5 September, reviewed against working
+production code 6 September 2026. Sources: Arturia's own `config.lua`
+(their MainStage device script), a MIDI log captured from Analog Lab, direct
+measurement on hardware, and two Max for Live JavaScript devices that drive a
+live rig built on this protocol.
 
-Markeringer:
+Confidence markers used throughout:
 
-- **[målt]** — efterprøvet på hardware.
-- **[kode]** — pakken eller CC'en bruges i produktionskoden og virker i drift.
-  Stærkere end et gæt, svagere end en måling: den er aldrig blevet isoleret
-  og varieret, så det er uvist hvilke felter der bærer virkningen.
-- **[ulæst]** — læst ud af kode eller log uden at være efterprøvet.
-- **[gæt]** — udledt, ikke set.
+- **[measured]** — verified on hardware.
+- **[code]** — the packet or CC is used in production code and works in daily
+  use. Stronger than a guess, weaker than a measurement: it has never been
+  isolated and varied, so it is unknown which fields actually carry the effect.
+- **[unverified]** — read out of code or a log, never tested.
+- **[guess]** — derived from a pattern, never observed.
+- **[rejected]** — tried and found wrong. Listed so nobody spends an
+  afternoon on it twice.
 
 ---
 
-## Indpakning
+## Envelope
 
     F0 00 20 6B 7F 42 <payload> F7
 
-## To skærmfamilier
+## Two screen families
 
-Byte 7 i payload afgør hvilken skærmverden man er i:
+Byte 7 of the payload decides which screen world you are in:
 
-| Familie | Bruges af | Layout |
+| Family | Used by | Layout |
 |---|---|---|
-| `00 02 04` | MainStage-scriptet, DAW-mode | Liste i to kolonner, footer-rækker |
-| `00 01 04` | Analog Lab, Arturia-mode | Liste i én kolonne, ikonpanel til højre |
+| `00 02 04` | The MainStage script, DAW mode | Two-column list, footer button rows |
+| `00 01 04` | Analog Lab, Arturia mode | Single-column list, icon panel on the right |
 
-**[målt]** Familierne er isolerede. Pakker fra den ene bliver ignoreret mens den
-andens side står, uanset rækkefølge.
+**[measured]** The families are isolated. Packets from one are ignored while
+the other's page is displayed, in either order.
 
-`00 02 03` er en tredje familie: rene LED-pakker, uden skærm. Se LED-afsnittet.
+`00 02 03` is a third family: pure LED packets, no screen effect. See the LED
+section.
 
-## Mode og handshake
+## Mode and handshake
 
-    00 02 05 01   DAW connect        (CONNEXION_DAW i config.lua)
+    00 02 05 01   DAW connect        (CONNEXION_DAW in config.lua)
     00 02 05 00   DAW disconnect
     00 01 05 01   Arturia connect
     00 01 05 00   Arturia disconnect
 
-**[målt]** Connect virker kun når enheden i forvejen står i det tilsvarende mode.
-Det er et handshake, ikke et mode-skift.
+**[measured]** Connect only works when the unit is already in the corresponding
+mode. It is a handshake, not a mode switch.
 
-**[kode]** DAW connect sendes ved hvert Init i begge js-filer. Det er billigt og
-gør riggen uafhængig af om AbleSet har været åbnet først — uden det stod
-skærmen død når KeyLab'en blev tændt efter Ableton.
+**[code]** Sending DAW connect on every init is cheap and makes a rig
+independent of what else has touched the port. Without it the screen stayed
+dead whenever the keyboard was powered on after the DAW.
 
-**[målt]** Der findes ingen kendt sysex der skifter mode *med vilje*. Skiftet er
-fysisk: Prog-tasten plus skærmknap 5 (Arturia) eller 6 (DAW).
-`21 11 40 02 00 <n>` fra KeyLab **Essential** mk3-guiden virker ikke på denne model.
+**[measured]** There is no known SysEx that changes mode deliberately. The
+switch is physical: the Prog key plus screen button 5 (Arturia) or 6 (DAW).
+`21 11 40 02 00 <n>` from the KeyLab **Essential** mk3 guide does nothing on
+this model.
 
-**[målt] 5/9-2026 — undtagelsen:** en skrivning i konfigurations-familien
-`21 03 40` river enheden over i **User mode** med det samme. Det er ikke et
-brugbart mode-skift: der findes ingen vej tilbage til DAW-banken uden et fysisk
-tryk, så det er i praksis en bivirkning man skal undgå, ikke en funktion.
-Se afsnittet om pad-banker nedenfor.
+**[measured] 5 Sep 2026 — the exception:** a write in the configuration family
+`21 03 40` throws the unit into **User mode** immediately. It is not a usable
+mode switch: there is no way back to the DAW bank without a physical press, so
+in practice it is a side effect to avoid rather than a feature. See the pad
+bank section.
 
 ---
 
-# CC i DAW-mode (DAW-porten, kanal 1)
+# CC in DAW mode (DAW port, channel 1)
 
-Alt herunder er momentant hvor intet andet står: 127 ved tryk, 0 ved slip.
-Det er den mode riggen kører i; Arturia-modes helt anden mapning står
-længere nede.
+Everything below is momentary unless stated: 127 on press, 0 on release.
 
-## Skærmknapper — CC45-52
+## Screen buttons — CC45-52
 
-**[målt] 23/7-2026** med MIDI Monitor, alle otte enkeltvis. De ligger i én
-ubrudt række, øverste række først:
+**[measured] 23 Jul 2026** with a MIDI monitor, all eight individually. They
+form one unbroken CC range, top row first:
 
-| Knap | Række | Sysex-id | CC |
+| Button | Row | SysEx id | CC |
 |---|---|---|---|
-| 1 | nederste | `0x01` | 49 |
-| 2 | nederste | `0x02` | 50 |
-| 3 | nederste | `0x03` | 51 |
-| 4 | nederste | `0x04` | 52 |
-| 5 | øverste | `0x05` | 45 |
-| 6 | øverste | `0x06` | 46 |
-| 7 | øverste | `0x07` | 47 |
-| 8 | øverste | `0x08` | 48 |
+| 1 | bottom | `0x01` | 49 |
+| 2 | bottom | `0x02` | 50 |
+| 3 | bottom | `0x03` | 51 |
+| 4 | bottom | `0x04` | 52 |
+| 5 | top | `0x05` | 45 |
+| 6 | top | `0x06` | 46 |
+| 7 | top | `0x07` | 47 |
+| 8 | top | `0x08` | 48 |
 
-Bemærk at sysex-id'et er knappens eget nummer, mens CC-rækken løber
-**modsat**: øverste række har de laveste CC'er. Kanal 1, ikke kanal 10 som
-pads'ene.
+Note that the SysEx id follows the button's own number while the CC range runs
+the **other way**: the top row has the lower CC numbers. Channel 1, not channel
+10 as the pads use.
 
-**[målt]** Skærmknapperne har RGB-LED, men de har **ingen adresse i
-`00 02 03`-familien**. En probe af id 0-127 dér gav kun svar fra
-transport-/funktionsrækken og de tolv pads. Knappernes lys sættes udelukkende
-af farvefeltet (felt 04) i footer-pakken i `00 02 04` — altså samme pakke som
-skriver etiketten. Det er derfor `00 02 04 <id> | 00 02 00 | 04 <rgb> 00 |
-05 00` med tomt tekstfelt kan tænde en knap uden at skrive noget på den.
+**[measured]** The screen buttons have RGB LEDs, but they have **no address in
+the `00 02 03` family**. A probe of ids 0-127 there drew responses only from
+the transport/function row and the twelve pads. The buttons' light is set
+purely by the colour field (field 04) of the footer packet in `00 02 04` — the
+same packet that writes the label. That is why `00 02 04 <id> | 00 02 00 |
+04 <rgb> 00 | 05 00` with an empty text field lights a button without writing
+anything on it.
 
-Leder man efter knappernes LED i LED-familien, finder man ingenting og
-konkluderer let at de ikke har lys. Det gør de.
+Look for these LEDs in the LED family and you find nothing, and it is easy to
+conclude the buttons have no light. They do.
 
-Det er en anden nummerering end `config.lua`'s: dér hedder de otte
-`F_Button1-8`, hvor F_Button1-4 → sysex-id 5-8 og F_Button5-8 → sysex-id 1-4.
-Arturias "F_Button1" er altså den knap der her hedder 5.
+Arturia's `config.lua` numbers them differently: it calls them `F_Button1-8`,
+where F_Button1-4 map to SysEx ids 5-8 and F_Button5-8 map to ids 1-4. Their
+"F_Button1" is the button called 5 here.
 
-Sysex-id 0x08 er **[kode]**, ikke isoleret målt — kun 0x01-0x04 er
-hardware-testet enkeltvis. I drift tegner den rigtigt.
+SysEx id 0x08 is **[code]**, not measured in isolation — only 0x01-0x04 have
+been tested individually. It draws correctly in use.
 
-## Transport/utility-rækken
+## Transport / utility row
 
-**[målt]** Fysisk rækkefølge, venstre mod højre: Tap, Rec, Play, Stop, Cycle,
+**[measured]** Physical order, left to right: Tap, Rec, Play, Stop, Cycle,
 Back, Forward, Metro, Redo, Undo, Quantize, Save.
 
-| Knap | CC | Kilde |
+| Button | CC | Source |
 |---|---|---|
-| Stop | 20 | [målt] |
-| Play | 21 | [målt] |
-| Rec | 22 | [målt] |
-| Tap | 23 | [målt] |
-| Cycle | 24 | [målt] |
-| Back | 25 | [målt] |
-| Forward | 26 | [målt] |
-| Metro | 27 | [målt] |
-| Save | 41 | [målt] |
-| Quantize | 42 | [målt] |
-| Undo | 43 | [målt] |
-| Redo | 44 | [målt] |
+| Stop | 20 | [measured] |
+| Play | 21 | [measured] |
+| Rec | 22 | [measured] |
+| Tap | 23 | [measured] |
+| Cycle | 24 | [measured] |
+| Back | 25 | [measured] |
+| Forward | 26 | [measured] |
+| Metro | 27 | [measured] |
+| Save | 41 | [measured] |
+| Quantize | 42 | [measured] |
+| Undo | 43 | [measured] |
+| Redo | 44 | [measured] |
 
-**Rækken er delt i to grupper, og den anden løber baglæns.** De første otte
-knapper ligger stigende på 20-27. De sidste fire ligger på 41-44 og **faldende**
-i forhold til den fysiske rækkefølge: Redo (position 9) = 44, Undo = 43,
-Quantize = 42, Save (position 12) = 41. Rækken er altså hverken sammenhængende
-eller ensrettet — læs tabellen, regn ikke.
+**The row splits into two groups, and the second one runs backwards.** The
+first eight buttons ascend across 20-27. The last four sit at 41-44 and
+**descend** relative to their physical order: Redo (position 9) = 44, Undo =
+43, Quantize = 42, Save (position 12) = 41. The row is neither contiguous nor
+consistently directed — read the table, don't calculate.
 
-Bemærk også at 41-44 støder direkte op til skærmknappernes 45-52. De tolv
-knapper i midten deler nummerrum med skærmknapperne, ikke med hinanden.
+Note also that 41-44 butt directly up against the screen buttons' 45-52. The
+twelve centre buttons share a number range with the screen buttons rather than
+with each other.
 
-## Jog-hjul
+## Jog wheel
 
-**[kode]**
+**[code]**
 
-| Funktion | CC | Opførsel |
+| Function | CC | Behaviour |
 |---|---|---|
-| Drej | 116 | centreret om 64: >64 med uret, <64 mod uret |
-| Klik | 117 | momentant, 127/0 |
+| Turn | 116 | centred on 64: >64 clockwise, <64 counter-clockwise |
+| Click | 117 | momentary, 127/0 |
 
-Hjulet er ikke et relativt +1/-1: værdien ligger længere fra 64 jo hurtigere
-man drejer, og mætter ved 61 og 67. Riggen bruger kun fortegnet og lader hvert
-bud være ét trin — ellers løber listen fra én ved raske drej.
+The wheel is not a relative +1/-1 encoder: the value moves further from 64 the
+faster you turn, saturating at 61 and 67. Using only the sign and treating each
+message as one step keeps a list from running away on a fast turn.
 
-**[målt] 5/9-2026** Hjul-klikket er ægte momentant og rapporterer hold: 127 ved
-nedtryk, 0 ved slip 938 ms senere, ingen prel. Det kan altså bære både kort og
-langt tryk.
+**[measured] 5 Sep 2026** The wheel click is genuinely momentary and reports
+hold: 127 on press, 0 on release 938 ms later, no bounce. It can therefore
+carry both short and long press gestures.
 
-## Fadere og encodere — bevægelse
+## Faders and encoders — movement
 
-**[målt]** Hver kontrol har **to** CC'er: en for berøring og en for bevægelse.
-De ligger langt fra hinanden og skal holdes adskilt.
+**[measured]** Every control has **two** CCs: one for touch and one for
+movement. They sit far apart and must be kept separate.
 
-| Nr. | Fader | Encoder |
+| No. | Fader | Encoder |
 |---|---|---|
 | 1 | 105 | 91 |
 | 2 | 106 | 92 |
@@ -169,414 +175,419 @@ De ligger langt fra hinanden og skal holdes adskilt.
 | 8 | 112 | 103 |
 | 9 | 113 | 104 |
 
-Faderne er sammenhængende 105-113 og sender absolut 0-127. Encoderne er ikke
-sammenhængende: 93 og 98-101 indgår ikke. Læs tabellen, regn ikke.
+The faders are contiguous, 105-113, and send absolute 0-127. The encoders are
+not: 93 and 98-101 are not part of the range. Read the table, don't
+calculate.
 
-**[målt]** Encoderne sender **relativt** i DAW-mode, som 64 ± delta (tos
-komplement omkring 64) — ikke absolut 0-127 som i Arturia-mode. Samme kodning
-som jog-hjulet. Det betyder at en encoders faktiske værdi ikke findes i
-hardwaren; den skal akkumuleres i modtageren, og der er ingen kilde at læse den
-tilbage fra ved opstart.
+**[measured]** In DAW mode the encoders send **relative** values, as 64 ± delta
+(two's complement around 64) — not absolute 0-127 as they do in Arturia mode.
+Same encoding as the jog wheel. This means an encoder's actual value does not
+exist in the hardware: it has to be accumulated in the receiver, and there is
+nothing to read it back from at startup.
 
-**[målt]** Fader 1-4's CC105-108 kan blive opsnappet af DAW'en selv hvis de er
-MIDI-mappet dér — så når de aldrig frem til et device. Det ligner en død fader
-og er det ikke.
+**[measured]** Faders 1-4 (CC105-108) can be swallowed by the DAW itself if
+they happen to be MIDI-mapped there, so they never reach a device. It looks
+like a dead fader and is not.
 
-## Fadere og encodere — berøring
+## Faders and encoders — touch
 
-**[målt] 24/8-2026:** hver fader og encoder har sin egen touch-CC, 127 ved
-berøring, 0 ved slip. Serierne er **ikke** sammenhængende:
+**[measured] 24 Aug 2026:** every fader and encoder has its own touch CC, 127
+on contact and 0 on release. The ranges are **not** contiguous:
 
-| Kontrol | Touch-CC |
+| Control | Touch CC |
 |---|---|
 | Fader 1-4 | 28, 29, 30, 31 |
-| Fader 5-9 | 33, 34, 35, 36, 37 (CC32 bruges ikke) |
+| Fader 5-9 | 33, 34, 35, 36, 37 (CC32 is not used) |
 | Encoder 1-8 | 8-15 |
 | Encoder 9 | 38 |
 
-Den nærliggende antagelse "CC28 + faderindeks hele vejen op" er altså forkert.
+So the natural assumption "CC28 plus fader index all the way up" is wrong.
 
-**[målt] — vigtigt, og ikke en softwarefejl:** KeyLab'ens egen skærmvisning for
-fadere og encodere udløses af **kapacitiv hudkontakt**, ikke af værdiændringen.
-Lægges et stykke papir mellem finger og fader, kommer der ingen touch-CC og
-ingen skærmvisning, selvom værdi-CC'en sendes og lyden følger med. Skub en
-fader med neglen, og displayet tier. Encodere kan fysisk ikke drejes uden
-hudkontakt og virker derfor altid. Det forklarer en lang række "pakketab" der
-aldrig var pakketab.
+**[measured] — important, and not a software bug:** the KeyLab's own on-screen
+readout for faders and encoders is triggered by **capacitive skin contact**,
+not by the value change. Put a sheet of paper between finger and fader and you
+get no touch CC and no screen readout at all, even though the value CC is sent
+and the sound follows. Nudge a fader with a fingernail and the display stays
+silent. Encoders cannot physically be turned without skin contact, which is why
+they always appear to work. This explains a long list of "dropped packets" that
+were never dropped packets.
 
-## Pads i DAW-banken
+## Pads in the DAW bank
 
-**[kode]** Pads sender Note **0-11** for pad 1-12 på DAW-porten, med Note On ved
-nedtryk og Note Off ved slip. (De øvrige banker sender helt andre noder ud ad
-den fysiske port — se pad-bank-afsnittet.)
+**[code]** The pads send Notes **0-11** for pads 1-12 on the DAW port, Note On
+on press and Note Off on release. The other banks send entirely different notes
+out of the physical MIDI port — see the pad bank section.
 
 ---
 
-# Familie `00 02 04` — DAW / MainStage
+# Family `00 02 04` — DAW / MainStage
 
-## Knapper (footer)
+## Footer buttons
 
-    00 02 04 <id> <felter...>
+    00 02 04 <id> <fields...>
 
-Felt-id og betydning (alle valgfri — udelades hvis `nil`):
+Field ids and meaning (all optional — omitted when `nil`):
 
-| Felt | Indhold |
+| Field | Content |
 |---|---|
 | `00` | type, 0-15 |
 | `01` | line_number |
 | `02` | color_type |
-| `03` | ikon |
-| `04` | RGB, tre bytes |
-| `05` `06` `07` | tekstlinje 1, 2, 3 |
+| `03` | icon |
+| `04` | RGB, three bytes |
+| `05` `06` `07` | text line 1, 2, 3 |
 
-### Arturias eget knap-format — brug dette
+### Arturia's own button format — use this one
 
-**[målt] 12/8-2026** ved at optage Arturias eget Ableton-kontrolscript med MIDI
-Monitor. Deres pakke for knap-id 0x01, slukket og tændt:
+**[measured] 12 Aug 2026** by recording Arturia's own Ableton control script
+with a MIDI monitor. Their packet for button id 0x01, off and on:
 
     00 02 04 01 | 00 02 00 | 03 00 00 | 04 7F 7F 7F 00 | 05 "2" 00
     00 02 04 01 | 00 03 00 | 03 00 00 | 04 7F 58 00 00 | 05 "2" 00
 
-Altså: **felt 00 = 0x03 tændt / 0x02 slukket**, plus et fast `03 00 00`.
-Felt 01 og 02 sender Arturia ikke.
+So: **field 00 = 0x03 on / 0x02 off**, plus a constant `03 00 00`. Arturia does
+not send fields 01 and 02 at all.
 
-Vores tidligere pakke sendte felt 00 = altid 04, manglede felt 03 og sendte
-felt 01/02. Den virkede ca. 29 gange ud af 30. Efter omlægningen til Arturias
-struktur står displayet skarpere, og hver-30.-tryk-fejlen forsvandt.
+An earlier home-grown packet sent field 00 = always 04, omitted field 03 and
+included fields 01/02. It worked roughly 29 times out of 30. After switching to
+Arturia's structure the display got visibly crisper and the every-30th-press
+failure disappeared. The firmware accepts extra or missing fields most of the
+time, but the deviation makes parsing fragile.
 
-**[målt]** Feltværdierne er **kontekstafhængige pr. knap-id**, ikke universelle.
-Arturias eget script bruger for knap-id 0x02 værdierne `00 0B` / `00 0A` og et
-konstant `03 0D` — hverken samme on/off-par eller samme felt 03 som id 0x01.
-Skal et nyt id have samme behandling, skal det måles enkeltvis.
+**[measured]** The field values are **context-dependent per button id**, not
+universal. For button id 0x02 Arturia's script uses `00 0B` / `00 0A` and a
+constant `03 0D` — neither the same on/off pair nor the same field 03 as id
+0x01. Any new id needs measuring individually.
 
-### Målte knap-resultater (id 8)
+### Measured button results (id 8)
 
-- **[målt]** Farvefelt alene (uden type) bliver ignoreret. Type skal med.
-- **[målt]** Nøgen ID uden felter gør ingenting.
-- **[målt]** `00 02 00 | 04 <rgb> 00 | 05 00` → **LED lyser, ingen tekst**.
-  Det eksplicit tomme tekstfelt er det afgørende; uden felt 05 tegnes en boks.
-- **[målt]** `00 00 00 | 04 <sort> 00 | 05 00` → **rydder pladsen**. Reset-kommandoen.
-  **[kode]** Den kan sendes for id 1-8 i træk som en "ryd skærmen"-funktion.
-- **[målt]** Type 00 optager pladsen uden at tage farve.
-- **[målt]** `line_number` 0-7 ændrer ikke rækkehøjden.
+- **[measured]** A colour field alone, without the type field, is ignored.
+- **[measured]** A bare id with no fields does nothing.
+- **[measured]** `00 02 00 | 04 <rgb> 00 | 05 00` → **LED lights, no text**.
+  The explicitly empty text field is what does it; without field 05 a box is
+  drawn.
+- **[measured]** `00 00 00 | 04 <black> 00 | 05 00` → **clears the slot**. This
+  is the reset command. **[code]** Sending it for ids 1-8 in turn works as a
+  "clear the screen" routine.
+- **[measured]** Type 00 occupies the slot without taking colour.
+- **[measured]** `line_number` 0-7 does not change row height.
 
-### Pladsforbrug
+### Space cost
 
-- **[målt]** Øverste knap-række tom → listen har 5 linjer.
-- **[målt]** Øverste knap-række aktiv → 3 linjer.
-- **[målt]** Prisen er **per række, ikke per knap**. Tænder du én af 5-8, er de
-  tre andre gratis.
-- **[målt]** Rækken kan ryddes igen under spil, så skiftet er ikke låst.
+- **[measured]** Top button row empty → the list has 5 lines.
+- **[measured]** Top button row active → 3 lines.
+- **[measured]** The cost is **per row, not per button**. Light one of 5-8 and
+  the other three are free.
+- **[measured]** The row can be cleared again during play, so the change is not
+  locked in.
 
-Dette gælder **kun** 0x31-listen. I 0x28+0x15-listen koster knapperne ingenting —
-se nedenfor.
+This applies **only** to the 0x31 list. In the 0x28+0x15 list the buttons cost
+nothing — see below.
 
 ## Popup (0x1E)
 
-    00 02 04 1E | 00 <værditekst> 00 | 01 <navn> 00 | 02 <0-127> 00 | 04 <rgb> 00
+    00 02 04 1E | 00 <value text> 00 | 01 <name> 00 | 02 <0-127> 00 | 04 <rgb> 00
 
-**[kode]** Riggens universelle kvittering: "Slow"/"Fast", "Brake On", "Init",
-mute-tilstande, drawbar-navne. Felt 02 er en hardware-værdi 0-127 (bruges som
-0 = fra, 127 = til når der ikke er en rigtig værdi).
+**[code]** The general-purpose acknowledgement popup. Field 02 is a hardware
+value 0-127 (used as 0 = off, 127 = on when there is no real value).
 
-**[målt]** Et ekstra `03 01 00` blev sendt indtil 12/8-2026. Arturia sender det
-ikke, og overskydende felter gør parsningen skrøbelig. Det er fjernet.
+**[measured]** An extra `03 01 00` was sent until 12 Aug 2026. Arturia does not
+send it, and surplus fields make parsing fragile. It has been removed.
 
-**[ulæst]** Om KeyLab'en rent faktisk farver popup-layoutet efter felt 04 er
-aldrig verificeret — feltet sendes, men effekten er ikke set.
+**[unverified]** Whether the device actually colours the popup layout from
+field 04 has never been confirmed — the field is sent, the effect is unseen.
 
-## Fader-/encodervisning (0x1D og 0x1C)
+## Fader / encoder readout (0x1D and 0x1C)
 
-Arturias format for fader-visningen, målt med MIDI Monitor:
+Arturia's fader packet, measured with a MIDI monitor:
 
     00 02 04 1D | 00 "-6.912 dB" 00 | 01 "Volume" 00 | 02 55 00 | 04 00 6C 7A 00
 
-**[målt]** Samme lære som ved knapperne: vi sendte derudover `03 01 00`, og det
-er fjernet.
+**[measured]** Same lesson as the buttons: an additional `03 01 00` was being
+sent and has been removed.
 
-**[målt] 24/8-2026 — afprøvet og forkastet:** at bruge encoder-layoutet (0x1C) i
-stedet for 0x1D til fadere gjorde det værre — læg og flere manglende
-opdateringer. Foreslå ikke layout-skift igen.
+**[measured] 24 Aug 2026 — tried and rejected:** using the encoder layout
+(0x1C) instead of 0x1D for faders made things worse — lag and more missing
+updates.
 
-Husk hudkontakt-fundet ovenfor før der fejlsøges på "manglende
-fader-opdatering". Det er hardware, ikke protokol.
+Check the skin-contact finding above before debugging "missing fader updates".
+That is hardware behaviour, not protocol.
 
-## Liste — 7 linjer i fuld bredde (0x28 + 0x15)
+## List — 7 full-width lines (0x28 + 0x15)
 
-**[målt]** Findes også i denne familie, selvom `config.lua` ikke kender den.
-Det er samme model som Analog Lab bruger i `00 01 04`. **Det er den listemodel
-riggen bruger.**
+**[measured]** This exists in this family too, even though `config.lua` does not
+know about it. It is the same model Analog Lab uses in `00 01 04`, and it is
+the better of the two list widgets.
 
-    00 02 04 28   titel og listens fulde længde. Sendes ÉN gang.
-    00 02 04 15   skub et punkt ind FORNEDEN — visningen ruller ned
-    00 02 04 16   skub et punkt ind FOROVEN — visningen ruller op
-    00 02 04 33   som 0x16
+    00 02 04 28   title and the list's full length. Sent ONCE.
+    00 02 04 15   push an item in at the BOTTOM — the view scrolls down
+    00 02 04 16   push an item in at the TOP — the view scrolls up
+    00 02 04 33   same as 0x16
 
-Pakkerne som de faktisk sendes **[kode]**:
+The packets as actually sent **[code]**:
 
-    titel:    00 02 04 28 | 00 <titel> 00 | 02 00 <længde> 00
-    punkt:    00 02 04 15 | 00 <tekst> 00 | 02 00 00 | 03 00 <nr> 00
-    markør:   00 02 04 15 | 03 00 <nr> 00
+    title:   00 02 04 28 | 00 <title> 00 | 02 00 <length> 00
+    item:    00 02 04 15 | 00 <text> 00 | 02 00 00 | 03 00 <index> 00
+    cursor:  00 02 04 15 | 03 00 <index> 00
 
-Felt 02 i titelpakken er to bytes, **høj byte først**: `02 <hi> <lo> 00`.
-Det samme gælder punkternes felt 03. Alt maskeres til 7 bit, så lister over
-127 punkter kræver at hi-byten tages i brug — det er aldrig afprøvet.
+Field 02 in the title packet is two bytes, **high byte first**: `02 <hi> <lo>
+00`. The same goes for the items' field 03. Everything is masked to 7 bits, so
+lists longer than 127 items would need the high byte — never attempted.
 
-**[målt] 31/8-2026:** punkternes felt 02 (to bytes, ukendt) blev sweepet 0-20
-for at se om boksens farve kunne styres. Ingen effekt ved nogen værdi. Feltet
-er ubrugt eller reserveret; send 0.
+**[measured] 31 Aug 2026:** the items' field 02 (two bytes, unknown) was swept
+0-20 to see whether the cursor box colour could be controlled. No effect at any
+value. The field is unused or reserved; send 0.
 
-### Sådan opfører listen sig
+### How the list behaves
 
-- **[målt]** 0x28 skal køre først. Uden den bliver 0x15 og 0x16 ignoreret.
-- **[målt]** Loftet er 7 synlige linjer.
-- **[målt]** **LED i øverste knap-række koster ingenting her.** Det er den
-  afgørende forskel til 0x31-listen. Alle otte knapper kan have både farve og
-  tekst samtidig, og listen bliver på 7 linjer.
-- **[målt]** Visningen viser altid de sidst indskubbede syv punkter. Firmwaren
-  ruller **ikke** af sig selv — den flytter kun boksen. Vil man rulle, skubber
-  man et punkt ind i den ende man bevæger sig imod.
-- **[målt]** Gensendes et punkt med 0x15, tilføjes det som nyt nederst, uanset
-  hvad der står i indeksfeltet. Indekset placerer ikke punktet.
-- **[målt]** Punkternes felt 03 flytter markøren efterhånden som de skubbes ind,
-  så boksen ender på det sidst sendte punkt. Sæt derfor markøren til sidst.
-- **[målt]** 0x28 sendt alene, uden efterfølgende punkter, nulstiller listen.
-- **[kode]** Der findes ingen "luk liste"-kommando. En liste erstattes ved at
-  sende en ny 0x28 med nye punkter; skal skærmen ryddes helt, bruges
-  reset-pakken på knapperne.
+- **[measured]** 0x28 must run first. Without it, 0x15 and 0x16 are ignored.
+- **[measured]** The ceiling is 7 visible lines.
+- **[measured]** **LEDs in the top button row cost nothing here.** This is the
+  decisive difference from the 0x31 list. All eight buttons can carry both
+  colour and text while the list stays at 7 lines.
+- **[measured]** The view always shows the last seven items pushed in. The
+  firmware does **not** scroll on its own — it only moves the cursor box. To
+  scroll, push an item in at the end you are moving toward.
+- **[measured]** Re-sending an item with 0x15 appends it at the bottom as a new
+  entry regardless of its index field. The index does not position the item.
+- **[measured]** Items' field 03 moves the cursor as they are pushed in, so the
+  box ends up on the last item sent. Set the cursor last.
+- **[measured]** 0x28 sent alone, with no items after it, resets the list.
+- **[code]** There is no "close list" command. A list is replaced by sending a
+  new 0x28 with new items; to clear the screen entirely, use the button reset
+  packet.
 
-### Markørens tal
+### The cursor number
 
-**[målt]** Tallet i cursor-pakken er ikke linjen på skærmen. Firmwaren regner
-selv boksens linje ud fra tallet, med forankring på 4. linje og listens fulde
-længde (felt 02 i 0x28) som ramme. Målt med en 14-sangs liste:
+**[measured]** The number in the cursor packet is not the line on screen. The
+firmware works out the box's line from that number, anchored on line 4 and
+framed by the list's full length (field 02 of 0x28). Measured with a 14-item
+list:
 
-| Tal | Linje |
+| Number | Line |
 |---|---|
 | 0-3 | 1-4 |
-| 4-10 | 4 (uændret) |
+| 4-10 | 4 (unchanged) |
 | 11-13 | 5-7 |
 
-Vil man have boksen på en bestemt linje, regnes tallet den anden vej. Reglen
-som den står i koden, med `ANKER = 3` (0-indekseret 4. linje) og `VISIBLE = 7`:
+To place the box on a specific line, compute the number backwards. The rule as
+implemented, with the anchor on the 4th line (index 3) and 7 visible lines:
 
-    er hele listen synlig (længde <= 7):   tal = markørens indeks
-    ellers, linje = indeks - øverste linje:
-        linje <= 3:   tal = linje
-        linje >  3:   tal = linje + (længde - 7)
+    whole list visible (length <= 7):   number = cursor index
+    otherwise, line = index - top line:
+        line <= 3:   number = line
+        line >  3:   number = line + (length - 7)
 
-**[målt] 3/9-2026:** særtilfældet for korte lister er ikke pynt. Uden det bliver
-`længde - 7` negativ, og markøren trækker fra i stedet for at lægge til: med 6
-linjer stod boksen stille på 5. punkt, med 5 gik den et skridt **tilbage**.
-Repertoirelisten er altid længere end skærmen, så fejlen viste sig først da
-presetlisterne kom til.
+**[measured] 3 Sep 2026:** the short-list special case is not cosmetic. Without
+it `length - 7` goes negative and the cursor subtracts instead of adding: with
+6 lines the box froze on the 5th item, with 5 lines it moved **backwards**.
 
-**[forkastet]** `0x15` med felt 04 ligner en cursor-kommando i én sondering,
-men flytter ikke boksen. Felt 03 er den rigtige.
+**[rejected]** `0x15` with field 04 looks like a cursor command in one probe,
+but does not move the box. Field 03 is the right one.
 
-**Bivirkning:** 0x16 slukkede en knap-LED i sweepet. Ikke efterprøvet i drift.
+**Side effect:** 0x16 switched off a button LED during the sweep. Not
+re-tested in normal use.
 
-## Liste — to kolonner (0x31)
+## List — two columns (0x31)
 
     00 02 04 31   refresh / init
-    00 02 04 32   append          felt 00 = venstre, felt 04 = højre
+    00 02 04 32   append          field 00 = left, field 04 = right
     00 02 04 33   prepend
-    00 02 04 34   liste-overskrift
-    00 02 04 01   header-zone
+    00 02 04 34   list heading
+    00 02 04 01   header zone
 
-0x31-felter: `00` preset, `02` left_size, `06` right_size, `0A`/`0B` kolonne-etiketter.
-Arturias script har udkommenteret felt `03`/`07` (global position) og `05`/`09` (select).
+0x31 fields: `00` preset, `02` left_size, `06` right_size, `0A`/`0B` column
+labels. Arturia's script has fields `03`/`07` (global position) and `05`/`09`
+(select) commented out.
 
-Bemærk at `01` uden for 0x31-widgeten er footer-knap 1 og intet andet —
-"header-zone"-læsningen gælder kun inde i widgeten.
+Note that `01` outside the 0x31 widget is footer button 1 and nothing else —
+the "header zone" reading applies only inside the widget.
 
-- **[målt]** Størrelsesfelterne styrer kun hvilken ende der tones — ikke antal
-  synlige linjer.
-- **[målt]** Antal tilføjede elementer ændrer heller ikke vinduet.
-- **[målt]** Udelades `0A`/`0B`, forsvinder teksten "SET"/"PRESET", men båndet og
-  skillelinjen bliver stående. De hører til widgeten, ikke til felterne.
-- **[ulæst]** `SCREEN_ROWS = 5` er hårdkodet i Arturias script, og de sætter
-  aldrig indhold i den øverste knap-række mens en liste står.
-- **[målt] 26/8-2026:** den virkende kæde i `config.lua` er `SetCenterList()` →
-  `Screen_List_Refresh` (0x31) / `Screen_List_Header` (0x34), `AppendToList()` →
-  0x32, `PrependToList()` → 0x33, `SetListCursor()` → 0x32 med felt-id 03/07 i
-  stedet for 00/04. `Screen_List_Add_Preset` er dødt kode med udefinerede
-  variabler og kaldes ingen steder — læs den ikke som dokumentation.
+- **[measured]** The size fields only control which end is shaded — not the
+  number of visible lines.
+- **[measured]** The number of appended items does not change the window either.
+- **[measured]** Omit `0A`/`0B` and the "SET"/"PRESET" labels disappear, but the
+  band and divider remain. They belong to the widget, not to the fields.
+- **[unverified]** `SCREEN_ROWS = 5` is hard-coded in Arturia's script, and they
+  never put content in the top button row while a list is displayed.
+- **[measured] 26 Aug 2026:** the working chain in `config.lua` is
+  `SetCenterList()` → `Screen_List_Refresh` (0x31) / `Screen_List_Header`
+  (0x34), `AppendToList()` → 0x32, `PrependToList()` → 0x33, `SetListCursor()`
+  → 0x32 with field ids 03/07 instead of 00/04. `Screen_List_Add_Preset` is
+  dead code with undefined variables and is called from nowhere — do not read
+  it as documentation.
 
 ---
 
-# Familie `00 02 03` — LED'er
+# Family `00 02 03` — LEDs
 
     00 02 03 <id> <r> <g> <b> 00
 
-Én pakke pr. diode, RGB 0-127 pr. kanal. Ingen skærmvirkning.
+One packet per LED, RGB 0-127 per channel. No screen effect.
 
-## Transport-rækkens LED-id
+## Transport row LED ids
 
-**[målt]** Alle otte kendte id'er rammer formlen **LED-id = fysisk position + 3**
-(position 1-indekseret fra Tap) uden undtagelse:
+**[measured]** Every id measured so far fits the formula **LED id = physical
+position + 3** (position 1-indexed from Tap) without exception:
 
-| Position | Knap | LED-id | Kilde |
+| Position | Button | LED id | Source |
 |---|---|---|---|
-| 1 | Tap | 4 | [målt] 4/9-2026 |
-| 2 | Rec | 5 | [gæt] |
-| 3 | Play | 6 | [målt] |
-| 4 | Stop | 7 | [målt] |
-| 5 | Cycle | 8 | [målt] |
-| 6 | Back | 9 | [målt] |
-| 7 | Forward | 10 | [målt] |
-| 8 | Metro | 11 | [målt] 4/9-2026 |
-| 9 | Redo | 12 | [gæt] |
-| 10 | Undo | 13 | [gæt] |
-| 11 | Quantize | 14 | [gæt] |
-| 12 | Save | 15 | [gæt] |
+| 1 | Tap | 4 | [measured] |
+| 2 | Rec | 5 | [guess] |
+| 3 | Play | 6 | [measured] |
+| 4 | Stop | 7 | [measured] |
+| 5 | Cycle | 8 | [measured] |
+| 6 | Back | 9 | [measured] |
+| 7 | Forward | 10 | [measured] |
+| 8 | Metro | 11 | [measured] |
+| 9 | Redo | 12 | [guess] |
+| 10 | Undo | 13 | [guess] |
+| 11 | Quantize | 14 | [guess] |
+| 12 | Save | 15 | [guess] |
 
-Tap og Metro blev bekræftet med et LED-sweep (id 0-20, hvidt blink pr. id) den
-4/9-2026. De lå længst fra de oprindeligt kendte id'er, så formlen står stærkt
-— men er stadig et gæt for de fire resterende.
+Tap and Metro were confirmed with an LED sweep (ids 0-20, a white blink per id)
+on 4 Sep 2026. They sat furthest from the originally known ids, so the formula
+is on solid ground — but it remains a guess for the four remaining buttons.
 
-> Kommentarerne i `keylab_arm.js` kalder stadig Tap=4 og Metro=11 "et gæt".
-> Den note er forældet: de blev bekræftet samme dag koden blev skrevet.
+**[rejected]** "LED id = position in the order the CCs were measured" — this
+collapsed as soon as Tap and Rec were checked against Play and Stop's known
+ids. The formula uses the PHYSICAL button order.
 
-**[forkastet]** "LED-id = position i CC-målerækkefølgen" — brød sammen da
-Tap/Rec blev prøvet mod Play/Stops kendte id'er. Formlen bruger den FYSISKE
-knap-rækkefølge.
+## Pad LED ids
 
-## Pad-LED-id
+**[measured]** `LED id = 82 + pad number - 1`, i.e. 82-93 for pads 1-12.
 
-**[målt]** `LED-id = 82 + padnr - 1`, altså 82-93 for pad 1-12.
+The evidence per id is uneven, which is worth knowing before building on it:
 
-Kildegrundlaget pr. id er ujævnt, og det er værd at kende før man bygger på det:
-
-| Pad | LED-id | Kilde |
+| Pad | LED id | Source |
 |---|---|---|
-| 1 | 82 | [gæt] — formel-udledt |
-| 2 | 83 | [kode] |
-| 3 | 84 | [målt] |
-| 4 | 85 | [målt] |
-| 5-8 | 86-89 | [kode] |
-| 9-10 | 90-91 | [gæt] — formel-udledt |
-| 11-12 | 92-93 | [målt] (Leslie/Brake lå der indtil 4/9-2026) |
+| 1 | 82 | [guess] — from the formula |
+| 2 | 83 | [code] |
+| 3 | 84 | [measured] |
+| 4 | 85 | [measured] |
+| 5-8 | 86-89 | [code] |
+| 9-10 | 90-91 | [guess] — from the formula |
+| 11-12 | 92-93 | [measured] |
 
-En tidligere udgave af dette dokument påstod at 90-93 blev målt 5/9. Den
-måling foregik i den session hvor enheden frøs (se advarslen nedenfor), og
-sweep-resultaterne derfra er ugyldige. Sagen afgøres billigt: giv pad 9-12 hver
-sin farve i en almindelig session og se efter.
+Pads 9-10 look like an odd gap between measured neighbours. They were part of
+a sweep whose session ended with the device frozen (see send limits below), so
+those results were discarded rather than trusted. It is cheap to settle: give
+each pad its own colour in a normal session and look.
 
-## Sendegrænse
+## Send limits
 
-**[målt] ADVARSEL:** 36 LED-pakker sendt i én byge fra SysEx Librarian **fryser
-enheden**, så den skal slukkes og tændes. Ved test: send i småbidder, fire ad
-gangen er rigeligt.
+**[measured] WARNING:** 36 LED packets sent in one burst from SysEx Librarian
+**freezes the device**, requiring a power cycle. When testing, send in small
+groups; four at a time is plenty.
 
-**[kode]** Riggen sender 12 pakker på én gang (alle pads males om når en
-instrumentknap holdes) uden problemer. Grænsen ligger altså et sted mellem 12
-og 36.
+**[code]** Sending 12 packets at once (repainting all pads) is fine in practice.
+The limit is somewhere between 12 and 36.
 
-**[målt]** Pakkerne virker **kun i DAW-banken**. Står hardwaren i bank D, sker
-der ingenting — banken tegner selv sine pads ud fra det gemte User-program.
+**[measured]** These packets only work **in the DAW bank**. In bank D nothing
+happens — the bank paints its own pads from the stored User program.
 
 ---
 
-# Familie `00 01 04` — Arturia / Analog Lab
+# Family `00 01 04` — Arturia / Analog Lab
 
-**[målt]** Virker uden at Analog Lab kører.
+**[measured]** Works without Analog Lab running.
 
-## Knapper
+## Buttons
 
-    00 01 04 <id> 00 <type> 00 | 01 01 00 | 02 <sel> 00 | [04 <rgb> 00] | 05 <tekst> 00 | 06 00
+    00 01 04 <id> 00 <type> 00 | 01 01 00 | 02 <sel> 00 | [04 <rgb> 00] | 05 <text> 00 | 06 00
 
-Id 1-4 er fanerne forneden, id 8 er etiketten øverst til højre.
-Type: `00` rydder, `02` øverste etiket, `04` og `06` faner.
+Ids 1-4 are the tabs along the bottom, id 8 is the label at the top right.
+Type: `00` clears, `02` top label, `04` and `06` tabs.
 
-## Liste — 7 linjer, én kolonne
+## List — 7 lines, one column
 
-    00 01 04 28   sidetitel; felt 02 = samlet antal (til scrollbaren)
-    00 01 04 15   tilføj punkt
+    00 01 04 28   page title; field 02 = total count (for the scrollbar)
+    00 01 04 15   add item
 
-Punkt-felter:
+Item fields:
 
-| Felt | Indhold |
+| Field | Content |
 |---|---|
-| `00` | tekst |
-| `01` | ikon-id |
-| `02` | tekstfarve — 0 hvid, 1 blå |
-| `03` | to bytes, ukendt |
+| `00` | text |
+| `01` | icon id |
+| `02` | text colour — 0 white, 1 blue |
+| `03` | two bytes, unknown |
 
-Ikon-id fra loggen: Bass 1, Electric Piano 4, Keys 5, Lead 6, Organ 7, Pad 8, Piano 9.
+Icon ids from the log: Bass 1, Electric Piano 4, Keys 5, Lead 6, Organ 7,
+Pad 8, Piano 9.
 
-- **[målt]** Ingen refresh-pakke. 0x28 med antallet nulstiller listen.
-- **[målt]** Felt `04` overskriver teksten **og** skifter ikonet. Felt `05` skifter
-  også ikonet. Ingen af dem giver en anden tekstkolonne.
-- **[målt]** Felt `06` og `07` giver kun en overskrift, intet punkt.
-- **[målt]** Højresiden er ikonpanel. Der findes ingen anden tekstkolonne i dette layout.
+- **[measured]** There is no refresh packet. 0x28 with the count resets the list.
+- **[measured]** Field `04` overwrites the text **and** changes the icon. Field
+  `05` also changes the icon. Neither produces a second text column.
+- **[measured]** Fields `06` and `07` produce only a heading, no item.
+- **[measured]** The right-hand side is an icon panel. There is no second text
+  column in this layout.
 
-## Control-bytes i familien
+## Control bytes in this family
 
-Fra sweep af 0x00-0x3F:
+From a sweep of 0x00-0x3F:
 
-| Byte | Virkning **[målt]** |
+| Byte | Effect **[measured]** |
 |---|---|
-| `05` `06` `07` | tænder LED 5, 6, 7 |
-| `0B` `0D` | skriver tekst midt på skærmen |
-| `0C` `0E` `26` `2E` | rydder skærmen |
-| `15` | tilføj listepunkt (se ovenfor) |
-| `16` | som 0x15, men hvid skrift |
-| `17` `18` | lille overskrift plus grå popup |
-| `19` | popup med to linjer |
-| `1A` | popup, højrestillet tekst |
-| `1B` `1E` | popup, flere linjer efter hinanden |
-| `1F` | rydder overskrift, skriver med lille skrift |
-| `22` | popup med halvfyldt søjle og pile |
-| `23` | tom søjle med pile |
-| `25` | en slags velkomstskærm |
-| `27` | farvepalet øverst til venstre — **ikke udforsket** |
-| `28` | sidetitel |
-| `29` | rydder siden, efterlader klaver-ikon |
-| `2A` | stort klaver-ikon |
-| `2F` | keyboard med farvemarkering, ligner keyrange — **ikke udforsket** |
-| `31`-`34` | MainStage-liste-widgeten, også her |
+| `05` `06` `07` | lights LED 5, 6, 7 |
+| `0B` `0D` | writes text in the middle of the screen |
+| `0C` `0E` `26` `2E` | clears the screen |
+| `15` | add list item (see above) |
+| `16` | as 0x15, but white text |
+| `17` `18` | small heading plus grey popup |
+| `19` | two-line popup |
+| `1A` | popup, right-aligned text |
+| `1B` `1E` | popup, several lines in sequence |
+| `1F` | clears the heading, writes in small type |
+| `22` | popup with a half-filled bar and arrows |
+| `23` | empty bar with arrows |
+| `25` | a kind of welcome screen |
+| `27` | colour palette at top left — **unexplored** |
+| `28` | page title |
+| `29` | clears the page, leaves a piano icon |
+| `2A` | large piano icon |
+| `2F` | keyboard with colour marking, looks like key range — **unexplored** |
+| `31`-`34` | the MainStage list widget, here too |
 
-- **[målt]** 0x32, 0x33 og 0x34 virker kun hvis 0x31 har kørt først.
-- **[målt]** 0x31 trækker MainStage-skillelinjen og footer-båndet med sig,
-  også inde i denne familie.
-- **[målt]** De to liste-widgets (0x15 og 0x31) udelukker hinanden. Den sidst
-  tegnede overtager skærmen. Man kan ikke få AL-punkter til venstre og
-  0x32-kolonne til højre samtidig.
+- **[measured]** 0x32, 0x33 and 0x34 only work if 0x31 has run first.
+- **[measured]** 0x31 drags the MainStage divider and footer band along with it,
+  even inside this family.
+- **[measured]** The two list widgets (0x15 and 0x31) are mutually exclusive.
+  Whichever was drawn last takes the screen.
 
-## Øvrige control-bytes i DAW-familien
+## Other control bytes in the DAW family
 
-Fra sweep af 0x00-0x3F **[målt]**:
+From a sweep of 0x00-0x3F **[measured]**:
 
-| Byte | Virkning |
+| Byte | Effect |
 |---|---|
-| `02` `04` `08` | tænder LED 2, 4, 8 |
-| `14` | overskrift |
-| `15` | listepunkt, fuld bredde (kræver 0x28 først) |
-| `16` | som 0x15, men slukker LED og skubber indholdet op |
+| `02` `04` `08` | lights LED 2, 4, 8 |
+| `14` | heading |
+| `15` | full-width list item (requires 0x28 first) |
+| `16` | as 0x15, but switches off an LED and pushes content up |
 | `19` | popup |
-| `1C` | encoder-visning |
-| `1D` | fader-visning |
-| `1E` | pad-/generel popup |
-| `25` | velkomstskærm |
-| `27` | farvevælger |
-| `28` | sidetitel, initialiserer listen |
-| `29` | gråt keyboard-ikon øverst med overskrift |
-| `2A` | gråt keyboard-ikon på midten |
-| `2F` | keyboard-tegning til keyrange |
+| `1C` | encoder readout |
+| `1D` | fader readout |
+| `1E` | pad / general popup |
+| `25` | welcome screen |
+| `27` | colour picker |
+| `28` | page title, initialises the list |
+| `29` | grey keyboard icon at the top with a heading |
+| `2A` | grey keyboard icon in the middle |
+| `2F` | keyboard drawing for key range |
 
 ---
 
-# CC i Arturia-mode
+# CC in Arturia mode
 
-Her gælder en helt anden mapning end i DAW-mode. Blandes de to sammen, ligner
-det en firmwarefejl.
+A completely different mapping applies here. Mixing the two up looks like a
+firmware fault.
 
-## Skærmknapper
+## Screen buttons
 
-**[målt]** Kanal 1, momentan:
+**[measured]** Channel 1, momentary:
 
-| Knap | CC |
+| Button | CC |
 |---|---|
 | 1 | 60 |
 | 2 | 61 |
@@ -587,14 +598,14 @@ det en firmwarefejl.
 | 7 | 58 |
 | 8 | 59 |
 
-De to grupper ligger ikke i forlængelse af hinanden: 1-4 er 60-63, 5-8 er 56-59.
+The two groups are not contiguous: 1-4 are 60-63, 5-8 are 56-59.
 
-## Fadere og encodere
+## Faders and encoders
 
-**[målt]** Kanal 1. Rækkefølgen er uregelmæssig — læs tabellen, gæt ikke.
-Encoderne sender absolutte værdier 0-127, ikke relative trin.
+**[measured]** Channel 1. The order is irregular — read the table, don't guess.
+The encoders send absolute values 0-127, not relative steps.
 
-| Nr. | Fader | Encoder |
+| No. | Fader | Encoder |
 |---|---|---|
 | 1 | 73 | 74 |
 | 2 | 75 | 71 |
@@ -606,148 +617,166 @@ Encoderne sender absolutte værdier 0-127, ikke relative trin.
 | 8 | 83 | 16 |
 | 9 | 85 | 17 |
 
-Faderne bruger 72, 73, 75, 79-83 og 85. Hullerne i rækken — 74, 76, 77, 78 og 84 —
-er ikke tilfældige: 74, 76 og 77 er encoder 1, 3 og 4.
+The faders use 72, 73, 75, 79-83 and 85. The gaps — 74, 76, 77, 78 and 84 — are
+not random: 74, 76 and 77 are encoders 1, 3 and 4.
 
 ---
 
-## Pad-banker og User-mode-konfiguration
+## Pad banks and User mode configuration
 
-De øvrige pad-banker er **lag over de samme 12 fysiske pads**. Der er ingen
-pad 13: pad-numrene er 1-12 i alle banker, og LED-id'erne er de samme.
+The other pad banks are **layers over the same 12 physical pads**. There is no
+pad 13: pad numbers are 1-12 in every bank, and the LED ids are the same.
 
-### Bankernes noder
+### The banks' notes
 
-**[målt]** Bank-noderne kommer ud ad den **fysiske MIDI-port** på kanal 10, ikke
-DAW-porten. Bank A starter på node 36, B på 48, C på 60, D på 72.
-(B og C er udledt af mønsteret, ikke målt.)
+**[measured]** Bank notes come out of the **physical MIDI port** on channel 10,
+not the DAW port. Bank A starts at note 36, B at 48, C at 60, D at 72.
+(B and C are inferred from the pattern, not measured.)
 
-MCC's egen nummerering er kromatisk: Pad 1 = 36, Pad 2 = 37, ... Pad 12 = 47 i
-bank A. Ableton viser rækkerne omvendt (drum rack-layout, C nederst til
-venstre), så det man ser som pad 9 nederst til venstre er MCC's Pad 1.
+MCC's own numbering is chromatic: Pad 1 = 36, Pad 2 = 37, ... Pad 12 = 47 in
+bank A. A DAW that shows a drum-rack layout (C at bottom left) displays the
+rows in the opposite order, so the pad at bottom left is MCC's Pad 1.
 
-**[målt]** Bank D's rækkefølge, som pads sidder fysisk:
+**[measured]** Bank D's order as the pads sit physically:
 
-    pad  9 10 11 12  =  node 72 73 74 75
-    pad  5  6  7  8  =  node 76 77 78 79
-    pad  1  2  3  4  =  node 80 81 82 83
+    pad  9 10 11 12  =  note 72 73 74 75
+    pad  5  6  7  8  =  note 76 77 78 79
+    pad  1  2  3  4  =  note 80 81 82 83
 
-Altså C4 nederst til venstre op til B4 øverst til højre.
+That is, C4 at bottom left up to B4 at top right.
 
-### Konfigurations-familien `21 03 40` — hvor farverne bor
+### The configuration family `21 03 40` — where the colours live
 
-Kortlagt 5/9-2026 ved at diffe to MCC-gemninger der kun adskilte sig ved bank
-D pad 1's farve (gul mod hvid). Præcis **én byte** var forskellig.
+Mapped 5 Sep 2026 by diffing two MCC saves that differed only in bank D pad 1's
+colour (yellow vs white). Exactly **one byte** differed.
 
-    F0 00 20 6B 7F 42 21 03 40 <lo> <hi> <værdi> F7    skriv én byte
-    F0 00 20 6B 7F 42 20 09 40 <lo> <hi> F7            læs én byte
-    F0 00 20 6B 7F 42 21 09 40 <lo> <hi> <værdi> F7    enhedens svar på læsning
-    F0 00 20 6B 7F 42 06 03 F7                         commit / gem
-    F0 00 20 6B 7F 42 24 03 20 <idx> <side> <tekst> F7 navne ("Pad 4", "Fader 1")
+    F0 00 20 6B 7F 42 21 03 40 <lo> <hi> <value> F7   write one byte
+    F0 00 20 6B 7F 42 20 09 40 <lo> <hi> F7           read one byte
+    F0 00 20 6B 7F 42 21 09 40 <lo> <hi> <value> F7   the device's reply
+    F0 00 20 6B 7F 42 06 03 F7                        commit / save
+    F0 00 20 6B 7F 42 24 03 20 <idx> <page> <text> F7 names ("Pad 4", "Fader 1")
 
-Adressen er `lo + hi * 128`.
+The address is `lo + hi * 128`.
 
-**Pad-post, 12 bytes, stride 0x0C:**
+**Pad record, 12 bytes, stride 0x0C:**
 
-    <farve>, 01, <node+8>, <node>, <padnr>, 0A, 00, 00, 7F, 00, 7F, 00
+    <colour>, 01, <note+8>, <note>, <pad number>, 0A, 00, 00, 7F, 00, 7F, 00
 
-Hver pad har fire poster, én pr. bank. Pad 1 ligger på 0x00D3 (bank A, node 36),
-0x00DF (B, 48), 0x00EB (C, 60), 0x00F7 (D, 72).
+Each pad has four records, one per bank. Pad 1 sits at 0x00D3 (bank A, note
+36), 0x00DF (B, 48), 0x00EB (C, 60), 0x00F7 (D, 72).
 
-**[målt]** Farven er **ét palet-indeks**, ikke en RGB-trippel som i
-`00 02 03`-familien. Kendte værdier: `0x28` = standard/hvid, `0x05` = gul.
-Resten af paletten er ikke kortlagt — den nemmeste vej er at sætte pad 1 til en
-farve i MCC, gemme, og læse indekset ud af loggen.
+**[measured]** The colour is **a single palette index**, not an RGB triple as in
+the `00 02 03` family. Known values: `0x28` = default/white, `0x05` = yellow.
+The rest of the palette is unmapped — the easiest route is to set pad 1 to a
+colour in MCC, save, and read the index out of the log.
 
-**[målt]** En skrivning slår igennem med det samme, også uden commit, og
-overlever et mode-skift. Men den river enheden over i User mode, så den kan
-**ikke** bruges til dynamisk farve-feedback under spil.
+**[measured]** A write takes effect immediately, even without a commit, and
+survives a mode change. But it throws the unit into User mode, so it **cannot**
+be used for dynamic colour feedback while playing.
 
-### Hvad bank D så kan bruges til
+### What bank D is good for, then
 
-Farver sættes én gang i MCC og bliver stående — statisk, ikke feedback.
-MIDI'en på kanal 10 kan fanges med et MIDI-spor på den fysiske port, og
-skærmen kan give popups med navne. Man får altså feedback, bare på displayet
-i stedet for i pad'en.
-
----
-
-## Afsendelse i praksis
-
-Fem ting der ikke står i nogen protokoltabel, men som afgør om det virker:
-
-1. **Én besked pr. kald.** **[målt] 20/8-2026:** sendes pakken som en række rå
-   enkelt-bytes, som modtageren selv skal samle, tabes 2-4% af pakkerne. Sendt
-   som én samlet besked: 111 tryk uden ét tab. Det var hele forklaringen på
-   "hver 30.-40. gang opdaterer skærmen ikke", og det forklarer også hvorfor
-   Arturias eget script aldrig fejlede over samme kabel og port.
-
-2. **Pause mellem skærmpakker.** **[kode]** To pakker i familie `00 02 04` sendt
-   umiddelbart efter hinanden kan race på selve enheden, så den ene tabes.
-   Riggen kører alle skærmpakker gennem en kø med 60 ms mellem hver. LED-pakker
-   (`00 02 03`) sendes uden om køen og har ikke vist samme problem.
-
-3. **Ikke for mange på én gang.** 12 pakker samtidig er i orden, 36 fryser
-   enheden. Se LED-afsnittet.
-
-4. **Kun ren ASCII.** **[kode]** Skærmen får kun tegn i intervallet 32-126.
-   æ/ø/å skal translittereres (ae/oe/aa), og typografiske anførselstegn og
-   tankestreger skal erstattes, ellers ryger tegnet — eller pakken.
-
-5. **Tekstlængder.** Riggen klipper footer-etiketter ved 12 tegn og
-   listelinjer ved 18. Det er valgte, afprøvede værdier, ikke målte maksima.
+Colours are set once in MCC and stay put — static, not feedback. The MIDI on
+channel 10 can be captured from the physical port, and the screen can still
+show popups with names. You get feedback, just on the display rather than in
+the pad.
 
 ---
 
-## Sammenfatning: valget mellem layouts
+## Sending, in practice
 
-| | 0x28 + 0x15 | 0x31-listen | 0x15 i AL-familien |
+Five things that appear in no protocol table but decide whether any of this
+works:
+
+1. **One complete message per call.** **[measured] 20 Aug 2026:** sending a
+   packet as a stream of raw single bytes for the receiver to reassemble loses
+   2-4% of packets. Sent as one complete message: 111 presses without a single
+   loss. That was the whole explanation for "every 30th or 40th press the
+   screen doesn't update", and it explains why Arturia's own script never
+   failed over the same cable and port.
+
+2. **Space out screen packets.** **[code]** Two packets in family `00 02 04`
+   sent back to back can race on the device itself and one gets dropped.
+   Running all screen packets through a queue with 60 ms between them fixed it.
+   LED packets (`00 02 03`) bypass the queue and have not shown the same
+   problem.
+
+3. **Don't send too many at once.** 12 packets at a time is fine, 36 freezes the
+   device. See the LED section.
+
+4. **Plain ASCII only.** **[code]** The screen only takes characters in the
+   32-126 range. Accented and non-Latin characters must be transliterated, and
+   typographic quotes and dashes replaced, or the character — or the packet —
+   is lost.
+
+5. **Text lengths.** Footer labels are cut at 12 characters and list lines at 18
+   in the working rig. Those are chosen, tested values, not measured maxima.
+
+---
+
+## Summary: choosing a layout
+
+| | 0x28 + 0x15 | 0x31 list | 0x15 in the AL family |
 |---|---|---|---|
-| Linjer | 7 | 5 | 7 |
-| Kolonner | 1, fuld bredde | 2 | 1, med ikonpanel |
-| Skillelinje | nej | ja | nej |
-| LED i øverste række | gratis | koster 2 linjer (5 → 3) | gratis |
-| Familie | `00 02 04` | begge | `00 01 04` |
+| Lines | 7 | 5 | 7 |
+| Columns | 1, full width | 2 | 1, with icon panel |
+| Divider | no | yes | no |
+| LEDs in the top row | free | cost 2 lines (5 → 3) | free |
+| Family | `00 02 04` | both | `00 01 04` |
 
-**0x28 + 0x15 i DAW-mode er det rigtige valg.** 7 linjer i fuld bredde, lys i
-begge knaprækker, og CC-mapningen er den riggen allerede bruger.
+**0x28 + 0x15 in DAW mode is the right choice** for most purposes: 7 full-width
+lines, lights in both button rows, and the DAW-mode CC mapping.
 
-## Blindgyder
+## Dead ends
 
-- Farve uden type-felt i familie 02 — ignoreres.
-- `line_number` som middel til lavere footer-række — ingen virkning.
-- Kolonne-etiketter fjernet for at få plads — båndet bliver.
-- Størrelses- og antalsfelter som middel til flere linjer — ingen virkning.
-- Familie 02-appends oven på en AL-side — ignoreres.
-- `21 11 40 02 00 <n>` som mode-skift — ingen virkning.
-- `0x15` felt 04 som cursor-kommando — det er felt 03.
-- `0x15` felt 02 som farvestyring på markøren — sweepet 0-20, ingen effekt.
-- Felt 02 i 0x28 sat til listens fulde længde mens kun de synlige punkter
-  sendes — så regner firmwaren markøren i en forkert ramme.
-- `00 02 03`-LED-pakker som middel til at farve pads i bank D — ignoreres helt;
-  banken tegner selv ud fra User-programmet.
-- Id 94 og opefter som "pad 13" — der findes ingen pad 13. Bankerne deler de
-  samme 12 dioder.
-- `00 01 03` som formodet Arturia-pendant til pad-LED-familien — ikke afprøvet
-  til bunds, men blev overhalet af fundet af konfigurations-familien.
-- Position-i-række som formel for LED-id ("id = position i CC-målerækkefølge")
-  — den rigtige formel bruger den FYSISKE knap-rækkefølge.
-- 0x1C (encoder-layout) til fader-visning — værre end 0x1D.
-- Fejlsøgning af "manglende fader-opdatering på skærmen" — det er kapacitiv
-  hudkontakt, ikke protokol.
+- Colour without a type field in family 02 — ignored.
+- `line_number` as a way to get a shorter footer row — no effect.
+- Removing column labels to gain space — the band stays.
+- Size and count fields as a way to get more lines — no effect.
+- Family 02 appends on top of an Analog Lab page — ignored.
+- `21 11 40 02 00 <n>` as a mode switch — no effect.
+- `0x15` field 04 as a cursor command — it is field 03.
+- `0x15` field 02 as cursor colour control — swept 0-20, no effect.
+- Field 02 of 0x28 set to the list's full length while only the visible items
+  are sent — the firmware then computes the cursor in the wrong frame.
+- `00 02 03` LED packets as a way to colour pads in bank D — ignored entirely;
+  the bank paints itself from the User program.
+- Id 94 and up as "pad 13" — there is no pad 13. The banks share the same 12
+  LEDs.
+- `00 01 03` as a presumed Arturia-mode counterpart to the pad LED family — not
+  tested exhaustively, but overtaken by the discovery of the configuration
+  family.
+- "LED id = position in CC measurement order" — the correct formula uses the
+  PHYSICAL button order.
+- 0x1C (encoder layout) for the fader readout — worse than 0x1D.
+- Debugging "missing fader updates on screen" — that is capacitive skin
+  contact, not protocol.
 
-## Ikke udforsket
+## Unexplored
 
-- Control-bytes over 0x3F i begge familier.
-- 0x27 (farvepalet) og 0x2F (keyboard-visning).
-- Lister over 127 punkter: kræver at hi-byten i længde- og indeksfelterne
-  tages i brug. Aldrig prøvet.
-- Rec/Redo/Undo/Quantize/Saves LED-id — kun formel, ikke målt.
-- Pad-LED 82, 90 og 91 — kun formel, ikke målt.
-- Palet-indekserne i `21 03 40`-farvebyten ud over 0x28 og 0x05.
-- Resten af konfigurations-billedet: hvad `21 09 40`-regionen indeholder, og
-  hvad de øvrige bytes i pad-posten (`0A`, de afsluttende `7F`) betyder.
-- Bank B og C's noder er udledt af mønsteret (48 og 60), ikke målt.
-- Om læsekommandoen `20 09 40` også dækker `03`-regionen, så hele
-  konfigurationen kan dumpes uden MCC.
-- Om popup-farvefeltet (0x1E felt 04) rent faktisk virker.
+- Control bytes above 0x3F in both families.
+- 0x27 (colour palette) and 0x2F (keyboard display).
+- Lists longer than 127 items: would require the high byte in the length and
+  index fields. Never attempted.
+- Rec/Redo/Undo/Quantize/Save's LED ids — formula only, not measured.
+- Pad LEDs 82, 90 and 91 — formula only, not measured.
+- Palette indices in the `21 03 40` colour byte beyond 0x28 and 0x05.
+- The rest of the configuration image: what the `21 09 40` region contains, and
+  what the remaining bytes in the pad record (`0A`, the trailing `7F`) mean.
+- Whether the read command `20 09 40` also covers the `03` region, so the whole
+  configuration could be dumped without MCC.
+- Whether the popup colour field (0x1E field 04) does anything at all.
+- Bank B and C's notes are inferred from the pattern (48 and 60), not measured.
+
+---
+
+## Related work
+
+The only comparable public material is a reverse-engineering guide for the
+KeyLab **Essential** mk3 at
+`github.com/PrzemekBarski/arturia-keylab-essential-mk3-programming-guide`.
+It describes a different structure (screen at `04 01 60`, DAW connect
+`02 0F 40 5A 01`) and does not transfer to this model.
+
+Corrections and additions are welcome — particularly measurements for anything
+marked [guess] or [code] above.
