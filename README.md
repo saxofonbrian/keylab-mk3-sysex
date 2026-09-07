@@ -1,7 +1,50 @@
-# KeyLab mk3 — Ableton proof of concept
+# Arturia KeyLab mk3 — screen SysEx, CC maps and LED IDs
 
-A minimal Max for Live device that drives an Arturia KeyLab 88/61 mk3 screen
-from Ableton Live:
+Reverse-engineered documentation of the Arturia KeyLab 61/88 mk3 screen
+protocol, plus a working Ableton Live proof of concept that uses it.
+
+There is no public documentation of this protocol. Arturia does not publish it,
+and the one guide that exists online covers the KeyLab **Essential** mk3, which
+uses a different structure entirely and does not transfer. Everything here was
+measured on hardware, read out of Arturia's own `config.lua`, or logged off the
+wire.
+
+## [`keylab-mk3-sysex.md`](keylab-mk3-sysex.md) — the reference
+
+The main content of this repository. Roughly 750 lines covering:
+
+- **Both screen families.** `00 02 04` (DAW mode, MainStage script) and
+  `00 01 04` (Arturia mode, Analog Lab) — packet layouts, field IDs, and the
+  fact that they ignore each other.
+- **Three list widgets** and what each one costs you in visible lines, plus how
+  the cursor number maps to a screen line (it is not the line number).
+- **Complete CC maps** for DAW mode and Arturia mode: screen buttons,
+  transport row, jog wheel, faders, encoders, and the separate touch CCs.
+- **LED IDs** for the transport row and the twelve pads, with the source of
+  each one marked.
+- **Pad banks** and the `21 03 40` configuration family where the User-mode pad
+  colours actually live.
+- **Dead ends**, listed explicitly — a dozen things that look like they should
+  work and do not, so nobody has to measure them twice.
+
+Every statement carries its provenance: **[målt]** measured on hardware,
+**[kode]** works in production but never isolated, **[ulæst]** read from code
+or logs without testing, **[gæt]** inferred. Read the markers before you build
+on something.
+
+The document is in Danish. The packet tables, hex and CC numbers are
+language-neutral, and machine translation handles the prose without trouble.
+
+## [`POC Project.zip`](POC%20Project.zip) — the proof of concept
+
+An Ableton Live set and a Max for Live device that put the protocol to work.
+Setup instructions are below.
+
+---
+
+# Proof of concept
+
+A minimal Max for Live device that drives the KeyLab screen from Ableton Live:
 
 - **Bottom row of screen buttons** arms and un-arms the first four tracks.
   The label is the track's own name, the colour shows arm state.
@@ -18,17 +61,9 @@ companion devices, no other software.
 Tested on a KeyLab 61 mk3 with Live 12 on macOS. The SysEx is identical on the
 88; only the MIDI port name differs.
 
-> **Looking for the protocol itself?** The full reverse-engineering reference —
-> both screen families, all CC maps, LED IDs, pad banks, measured dead ends —
-> is in [`keylab-mk3-sysex.md`](keylab-mk3-sysex.md). It is written in Danish;
-> the packet tables and hex are language-neutral. This POC is only a working
-> demonstration of a small corner of it.
-
----
-
 ## What you get
 
-Download **`POC Project.zip`** from the file list above and unpack it. Inside:
+Download `POC Project.zip` and unpack it. Inside:
 
 ```
 POC.als
@@ -41,8 +76,6 @@ M4L/
 alongside itself; if Max cannot find it, the `js` object comes up broken and
 nothing reaches the screen. Check the Max console — a missing script is
 reported there.
-
----
 
 ## 1. Put the KeyLab in DAW mode
 
@@ -144,8 +177,6 @@ and the Max console says nothing at all.
 **[connect(** sends the DAW handshake on its own — useful when the keyboard was
 switched on after Live.
 
----
-
 ## When the screen stays blank
 
 Work down this list. It is ordered by how often each one is the answer.
@@ -169,12 +200,11 @@ The useful principle underneath: the console tells you whether the code ran, a
 MIDI monitor tells you whether the bytes left the machine, and only the two
 together tell you where the fault is. One of them alone will mislead you.
 
----
-
 ## What the device sends
 
-All packets share the envelope `F0 00 20 6B 7F 42 <payload> F7`, and every
-payload here is in the `00 02 04` DAW screen family.
+A small subset of what `keylab-mk3-sysex.md` documents. All packets share the
+envelope `F0 00 20 6B 7F 42 <payload> F7`, and every payload here is in the
+`00 02 04` DAW screen family.
 
 ```
 connect     00 02 05 01
