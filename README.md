@@ -28,14 +28,11 @@ The main content of this repository. Roughly 750 lines covering:
   work and do not, so nobody has to measure them twice.
 
 Claims are marked with their provenance where it matters: **[measured]** on
-hardware, **[in code]** works in production but was never isolated and varied,
-**[unverified]** read out of code or logs without testing, **[guess]** inferred
-rather than seen, **[rejected]** tried and found wrong. Unmarked prose is
-explanation, not evidence. Check the marker before you build on something.
-
-The prose is in Danish; the markers, packet tables, hex and CC numbers are not.
-You can scan the document for what has actually been measured without reading a
-word of Danish, and machine translation handles the rest without trouble.
+hardware, **[code]** used in production and works in daily use, but was never
+isolated and varied, **[unverified]** read out of code or a log without being
+tested, **[guess]** derived from a pattern rather than observed, **[rejected]**
+tried and found wrong. Unmarked prose is explanation, not evidence. Check the
+marker before you build on something.
 
 ## [`POC Project.zip`](POC%20Project.zip) — the proof of concept
 
