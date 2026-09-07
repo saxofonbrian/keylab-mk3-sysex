@@ -18,9 +18,17 @@ companion devices, no other software.
 Tested on a KeyLab 61 mk3 with Live 12 on macOS. The SysEx is identical on the
 88; only the MIDI port name differs.
 
+> **Looking for the protocol itself?** The full reverse-engineering reference —
+> both screen families, all CC maps, LED IDs, pad banks, measured dead ends —
+> is in [`keylab-mk3-sysex.md`](keylab-mk3-sysex.md). It is written in Danish;
+> the packet tables and hex are language-neutral. This POC is only a working
+> demonstration of a small corner of it.
+
 ---
 
 ## What you get
+
+Download **`POC Project.zip`** from the file list above and unpack it. Inside:
 
 ```
 POC.als
@@ -30,8 +38,9 @@ M4L/
 ```
 
 `M4L` must stay next to `POC.als`. The device looks for `keylab_poc.js`
-alongside itself, and if Max cannot find it, the `js` object loads with no
-outlets and every packet is dropped without a word in the console.
+alongside itself; if Max cannot find it, the `js` object comes up broken and
+nothing reaches the screen. Check the Max console — a missing script is
+reported there.
 
 ---
 
@@ -52,8 +61,8 @@ handshake — `F0 00 20 6B 7F 42 00 02 05 01 F7`, sent on every init — but tha
 only works when the unit is already in DAW mode. It is a handshake, not a mode
 switch.
 
-How to tell you are in DAW mode: the screen buttons send CC 45-52. In Arturia
-mode the same buttons send CC 56-63.
+How to tell you are in DAW mode: the screen buttons send CC 45-52 (top row
+45-48, bottom row 49-52). In Arturia mode the same buttons send CC 56-63.
 
 ## 2. Turn off the Arturia control surface in Live
 
@@ -71,15 +80,19 @@ both and conclude your own packets work when they do not.
 
 In the **MIDI Ports** list below, for the KeyLab's **DAW** port:
 
-| | Track | Sync | Remote |
-|---|---|---|---|
-| Input: KeyLab mk3 (DAW) | **On** | Off | Off |
-| Output: KeyLab mk3 (DAW) | **On** | Off | Off |
+|                          | Track  | Sync | Remote |
+| ------------------------ | ------ | ---- | ------ |
+| Input: KeyLab mk3 (DAW)  | **On** | Off  | Off    |
+| Output: KeyLab mk3 (DAW) | **On** | Off  | Off    |
 
 Track must be on for *both* directions. Input and output are separate settings,
 and it is entirely possible to have buttons working while nothing reaches the
-screen. Remote off matters too: with it on, Live swallows the CCs before the
-device sees them.
+screen.
+
+Remote off matters too, though only for controls you have mapped: with Remote
+on, any CC that is bound in Live's MIDI Map Mode is consumed by Live and never
+reaches the device. Unmapped CCs pass through either way. Leaving it off keeps
+the question from arising.
 
 Note there are two ports per keyboard. The plain one carries the keys; the DAW
 one carries the screen, the transport buttons and the jog wheel. Their names
@@ -87,7 +100,7 @@ differ by a few characters. Pick the DAW port in every dropdown.
 
 ## 3. Open POC.als and check the control track
 
-The set holds four instrument tracks, a few named locators in the Arrangement,
+The set holds four instrument tracks, four named locators in the Arrangement,
 and a fifth track — **M4L** — carrying nothing but the device. Check three
 things on that track before anything else:
 
@@ -146,10 +159,11 @@ Work down this list. It is ordered by how often each one is the answer.
 5. **Does the Max console print `keylab_poc: ready — 4 tracks, N locators`?**
    No line means init never ran, or Max could not find the `.js` file — check
    that the `M4L` folder travelled with the `.als`.
-6. **Does a MIDI monitor see the packets?** Init sends eleven: one connect,
-   four button packets, one list title, one per locator, one cursor. If they
-   are on the wire and the screen is still blank, the keyboard is not in DAW
-   mode. If they are not, the fault is between the `js` object and the port.
+6. **Does a MIDI monitor see the packets?** Init sends seven packets plus one
+   per locator: one connect, four button packets, one list title, one cursor,
+   and one item per locator. If they are on the wire and the screen is still
+   blank, the keyboard is not in DAW mode. If they are not, the fault is
+   between the `js` object and the port.
 
 The useful principle underneath: the console tells you whether the code ran, a
 MIDI monitor tells you whether the bytes left the machine, and only the two
@@ -171,6 +185,11 @@ list item   00 02 04 15 | 00 <text> 00 | 02 00 00 | 03 <hi> <lo> 00
 cursor      00 02 04 15 | 03 <hi> <lo> 00
 ```
 
+The two bytes in the title packet are the number of items you actually push in,
+high byte first — not the length of some longer list you are showing a window
+of. Send the wrong number and the firmware places the cursor in the wrong
+frame.
+
 Three things that are easy to get wrong and hard to diagnose:
 
 - **Send each packet as one complete message**, not as a stream of single
@@ -178,6 +197,8 @@ Three things that are easy to get wrong and hard to diagnose:
   which shows up as "every thirtieth press the screen doesn't update".
 - **Space screen packets out.** Two `00 02 04` packets sent back to back can
   race on the device and one is dropped. This POC queues them 60 ms apart.
+  Whole bursts are worse: a few dozen SysEx packets at once can freeze the
+  keyboard until it is power-cycled.
 - **Plain ASCII only**, 32-126. Anything else costs you the character or the
   whole packet.
 
