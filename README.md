@@ -27,13 +27,15 @@ The main content of this repository. Roughly 750 lines covering:
 - **Dead ends**, listed explicitly — a dozen things that look like they should
   work and do not, so nobody has to measure them twice.
 
-Every statement carries its provenance: **[målt]** measured on hardware,
-**[kode]** works in production but never isolated, **[ulæst]** read from code
-or logs without testing, **[gæt]** inferred. Read the markers before you build
-on something.
+Claims are marked with their provenance where it matters: **[measured]** on
+hardware, **[in code]** works in production but was never isolated and varied,
+**[unverified]** read out of code or logs without testing, **[guess]** inferred
+rather than seen, **[rejected]** tried and found wrong. Unmarked prose is
+explanation, not evidence. Check the marker before you build on something.
 
-The document is in Danish. The packet tables, hex and CC numbers are
-language-neutral, and machine translation handles the prose without trouble.
+The prose is in Danish; the markers, packet tables, hex and CC numbers are not.
+You can scan the document for what has actually been measured without reading a
+word of Danish, and machine translation handles the rest without trouble.
 
 ## [`POC Project.zip`](POC%20Project.zip) — the proof of concept
 
