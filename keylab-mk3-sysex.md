@@ -34,8 +34,13 @@ Byte 7 of the payload decides which screen world you are in:
 
 | Family | Used by | Layout |
 |---|---|---|
-| `00 02 04` | The MainStage script, DAW mode | Two-column list, footer button rows |
-| `00 01 04` | Analog Lab, Arturia mode | Single-column list, icon panel on the right |
+| `00 02 04` | The MainStage script, DAW mode | 7-line list (one column, or with icon panel), footer button rows |
+| `00 01 04` | Analog Lab, Arturia mode | 7-line list (one column, or with icon panel) |
+
+**[measured]** The list layout is chosen by the title packet's control byte, not
+by the family: `14` is one column across the whole width, `28` is a list with an
+icon panel on the right. Both work in both families. The two-column list with a
+divider (`0x31`) exists only in `00 02 04`.
 
 **[measured]** The families are isolated. Packets from one are ignored while
 the other's page is displayed, in either order.
@@ -282,7 +287,7 @@ constant `03 0D` — neither the same on/off pair nor the same field 03 as id
 - **[measured]** The row can be cleared again during play, so the change is not
   locked in.
 
-This applies **only** to the 0x31 list. In the 0x28+0x15 list the buttons cost
+This applies **only** to the 0x31 list. In the 0x14/0x28 + 0x15 lists the buttons cost
 nothing — see below.
 
 ## Popup (0x1E)
@@ -565,7 +570,7 @@ happens — the bank paints its own pads from the stored User program.
 Ids 1-4 are the tabs along the bottom, id 8 is the label at the top right.
 Type: `00` clears, `02` top label, `04` and `06` tabs.
 
-## List — 7 lines, one column
+## List — 7 lines, with icon panel (0x28)
 
     00 01 04 28   page title; field 02 = total count (for the scrollbar)
     00 01 04 15   add item
@@ -604,7 +609,7 @@ per step (append at the bottom) followed by the cursor, which is the same
 sequence the `00 02 04` list uses. The same title packet works in family `00 02 04`, see
 that section.
 
-- **[measured]** There is no refresh packet. 0x28 with the count resets the list.
+- **[measured]** There is no refresh packet. A title packet with the count resets the list.
 - **[measured]** Field `04` overwrites the text **and** changes the icon. Field
   `05` also changes the icon. Neither produces a second text column.
 - **[measured]** Fields `06` and `07` produce only a heading, no item.
@@ -650,8 +655,8 @@ From a sweep of 0x00-0x3F **[measured]**:
 | Byte | Effect |
 |---|---|
 | `02` `04` `08` | lights LED 2, 4, 8 |
-| `14` | heading |
-| `15` | full-width list item (requires 0x28 first) |
+| `14` | heading; also the title of the one-column list, see the list section |
+| `15` | list item (requires a title, 0x14 or 0x28, first) |
 | `16` | as 0x15, but switches off an LED and pushes content up |
 | `19` | popup |
 | `1C` | encoder readout |

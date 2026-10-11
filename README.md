@@ -11,13 +11,17 @@ wire.
 
 ## [`keylab-mk3-sysex.md`](keylab-mk3-sysex.md) — the reference
 
-The main content of this repository. Roughly 750 lines covering:
+The main content of this repository. Roughly 900 lines covering:
 
 - **Both screen families.** `00 02 04` (DAW mode, MainStage script) and
   `00 01 04` (Arturia mode, Analog Lab) — packet layouts, field IDs, and the
   fact that they ignore each other.
 - **Three list widgets** and what each one costs you in visible lines, plus how
   the cursor number maps to a screen line (it is not the line number).
+- **MIDI pauses under a fader readout.** With a list on screen, each changing
+  readout makes the keyboard stop sending MIDI for ~60 ms in every ~100. The
+  list title `0x14` (one column) avoids it. Item fields (icons, text colour)
+  are documented too.
 - **Complete CC maps** for DAW mode and Arturia mode: screen buttons,
   transport row, jog wheel, faders, encoders, and the separate touch CCs.
 - **LED IDs** for the transport row and the twelve pads, with the source of
