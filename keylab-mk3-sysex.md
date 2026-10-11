@@ -5,7 +5,8 @@ the MIDI port name differs. This is **not** official documentation and is not
 endorsed by Arturia.
 
 Mapped 27-28 August 2026, extended 4-5 September, reviewed against working
-production code 6 September 2026. Sources: Arturia's own `config.lua`
+production code 6 September 2026, list item fields and the popup-over-list MIDI
+pauses added 11 October 2026. Sources: Arturia's own `config.lua`
 (their MainStage device script), a MIDI log captured from Analog Lab, direct
 measurement on hardware, and two Max for Live JavaScript devices that drive a
 live rig built on this protocol.
@@ -313,34 +314,99 @@ updates.
 Check the skin-contact finding above before debugging "missing fader updates".
 That is hardware behaviour, not protocol.
 
-## List — 7 full-width lines (0x28 + 0x15)
+### MIDI pauses when a readout is drawn over a list
+
+**[measured] 11 Oct 2026.** With a list on screen, every changing 0x1D readout
+makes the keyboard stop sending MIDI for about 60 ms out of every ~100 ms. It
+is the keyboard's own output that pauses, so it shows in a MIDI monitor on the
+way in, not just in the host. Played notes at a steady tempo while a fader is
+moved arrive in bunches (note-on spacing alternates ~100 / ~190 ms instead of a
+steady ~140 ms), and the fader's own CC values skip 2-3 steps at a time instead
+of 1. An empty list (title only) pauses too, for less time (~43 ms in ~80 ms).
+
+Without a list on screen there are no pauses — readouts alone, readouts with
+footer buttons, and readouts with LEDs all stayed clean. Arturia's own script
+sends ~44 readouts a second without trouble because it never has a list up.
+
+**[measured]** None of these changes the pauses: the send rate (the same at 30
+and at 70 readouts per second); the readout's fields `03` and `04`, including
+the values Analog Lab sends (`03 01`, `04 01 5D 7C`) and Arturia's (`04 00 6C
+7A`); echoing the touch CC back; writing the Live parameter; resending DAW
+connect on touch.
+
+**[measured] The fix is in the list, not the readout.** The pauses are gone when
+the list is drawn the way Analog Lab draws its own:
+
+- title `0x28` **with the icon field `01` on every item**, or
+- title `0x14` (the one-column list, see below) with items that have no field
+  `01`.
+
+The combination that pauses is title `0x28` with items **without** field `01` —
+which is what this document used to recommend. Field `03` on the items (the
+line index, or `00 00`) makes no difference to the pauses.
+
+**[measured]** Drawing the readout or the list in family `00 01 04` while the
+keyboard is in DAW mode removes the pauses only because nothing is drawn at all.
+The families are isolated, see above.
+
+## List — 7 lines (0x14 or 0x28, plus 0x15)
 
 **[measured]** This exists in this family too, even though `config.lua` does not
 know about it. It is the same model Analog Lab uses in `00 01 04`, and it is
 the better of the two list widgets.
 
-    00 02 04 28   title and the list's full length. Sent ONCE.
+    00 02 04 28   title and the list's full length. Sent ONCE. Two columns:
+                  the right-hand side is an icon panel, so every item needs
+                  the icon field 01 (see the pauses above)
+    00 02 04 14   the same title packet, but one column across the whole
+                  width, no icon panel — Analog Lab's GENRES list
     00 02 04 15   push an item in at the BOTTOM — the view scrolls down
     00 02 04 16   push an item in at the TOP — the view scrolls up
     00 02 04 33   same as 0x16
 
 The packets as actually sent **[code]**:
 
-    title:   00 02 04 28 | 00 <title> 00 | 02 00 <length> 00
+    title:   00 02 04 14 | 00 <title> 00 | 02 00 <length> 00
     item:    00 02 04 15 | 00 <text> 00 | 02 00 00 | 03 00 <index> 00
     cursor:  00 02 04 15 | 03 00 <index> 00
+
+with `28` instead of `14` in the title and `01 <icon id>` in every item, the
+item packet is:
+
+    item:    00 02 04 15 | 00 <text> 00 | 01 <icon id> | 02 00 00 | 03 00 <index> 00
 
 Field 02 in the title packet is two bytes, **high byte first**: `02 <hi> <lo>
 00`. The same goes for the items' field 03. Everything is masked to 7 bits, so
 lists longer than 127 items would need the high byte — never attempted.
 
-**[measured] 31 Aug 2026:** the items' field 02 (two bytes, unknown) was swept
-0-20 to see whether the cursor box colour could be controlled. No effect at any
-value. The field is unused or reserved; send 0.
+### Item fields
+
+**[measured] 11 Oct 2026**, in the two-column list (title `0x28`):
+
+| Field | Content |
+|---|---|
+| `00` | text |
+| `01` | icon id, one byte. Shown in the icon panel for the line the cursor is on, and it changes as the cursor moves |
+| `02` | two bytes. The **first** byte is the text colour: `00` white, anything else blue. The second byte has no visible effect |
+| `03` | two bytes, the line index. Analog Lab sends `00 00` in its icon list, and `00 00` or the index in its one-column list; either is fine here |
+
+Icon ids, as seen on screen with the cursor on each line: `00` the Arturia logo,
+`01` a string instrument, `02` a trumpet, `03` a drum, `04` keys, `05` a
+keyboard. That fits Analog Lab's categories (Bass 1, Electric Piano 4, Keys 5,
+Lead 6, Organ 7, Pad 8, Piano 9, see the Analog Lab section). Ids above 5 were
+not looked at on this family's screen.
+
+Text colour: values 1-6, 8-112 (every 4th) and 127 were tried and all gave the
+same blue. There is no colour scale here, just white or blue.
+
+**[measured] 31 Aug 2026:** field 02 was swept 0-20 to see whether the cursor box
+colour could be controlled. The box did not change. See above: the field
+colours the item's own text.
 
 ### How the list behaves
 
-- **[measured]** 0x28 must run first. Without it, 0x15 and 0x16 are ignored.
+- **[measured]** A title packet (`0x28`, or `0x14`) must run first. Without it,
+  0x15 and 0x16 are ignored.
 - **[measured]** The ceiling is 7 visible lines.
 - **[measured]** **LEDs in the top button row cost nothing here.** This is the
   decisive difference from the 0x31 list. All eight buttons can carry both
@@ -352,9 +418,9 @@ value. The field is unused or reserved; send 0.
   entry regardless of its index field. The index does not position the item.
 - **[measured]** Items' field 03 moves the cursor as they are pushed in, so the
   box ends up on the last item sent. Set the cursor last.
-- **[measured]** 0x28 sent alone, with no items after it, resets the list.
+- **[measured]** A title sent alone, with no items after it, resets the list.
 - **[code]** There is no "close list" command. A list is replaced by sending a
-  new 0x28 with new items; to clear the screen entirely, use the button reset
+  new title with new items; to clear the screen entirely, use the button reset
   packet.
 
 ### The cursor number
@@ -514,7 +580,29 @@ Item fields:
 | `03` | two bytes, unknown |
 
 Icon ids from the log: Bass 1, Electric Piano 4, Keys 5, Lead 6, Organ 7,
-Pad 8, Piano 9.
+Pad 8, Piano 9. **[unverified]** From Analog Lab's INSTRUMENTS list (log, 11 Oct
+2026): Acid 0x11, ARP 2600 0x10, Aug. STRINGS 0x15, Aug. VOICES 0x16, B-3 0x18,
+Buchla Easel 0x19, Clavinet 0x1E.
+
+The same icon and colour fields work in the DAW family's list; see the item
+fields table there. In `00 02 04` the text colour is the first of the field's
+two bytes and any non-zero value gives blue.
+
+### The one-column list (0x14)
+
+**[unverified]** From a log of Analog Lab switching to its GENRES list, with the
+screen showing one column across the whole width and no icon panel:
+
+    title:   00 01 04 14 | 00 GENRES 00 | 02 00 <count> 00
+    item:    00 01 04 15 | 00 <text> 00 | 02 00 00 | 03 00 <index> 00
+    cursor:  00 01 04 15 | 03 00 <index> 00
+
+The title control byte is `14` instead of `28` and the items have no field
+`01`. The items sent when the list opens have `03 00 00`; the ones appended
+while scrolling carry the line's index in field `03`. Scrolling sends one item
+per step (append at the bottom) followed by the cursor, which is the same
+sequence the `00 02 04` list uses. The same title packet works in family `00 02 04`, see
+that section.
 
 - **[measured]** There is no refresh packet. 0x28 with the count resets the list.
 - **[measured]** Field `04` overwrites the text **and** changes the icon. Field
@@ -712,20 +800,31 @@ works:
 5. **Text lengths.** Footer labels are cut at 12 characters and list lines at 18
    in the working rig. Those are chosen, tested values, not measured maxima.
 
+6. **A list changes how the keyboard behaves under a fader readout.**
+   **[measured] 11 Oct 2026:** with a title `0x28` list whose items lack field
+   `01` on screen, every changing 0x1D readout makes the keyboard stop sending
+   MIDI for ~60 ms in every ~100. Notes and fader CCs arrive late and in
+   bunches. Use title `0x14`, or give every item an icon id. See the pauses
+   section under the fader readout.
+
 ---
 
 ## Summary: choosing a layout
 
-| | 0x28 + 0x15 | 0x31 list | 0x15 in the AL family |
-|---|---|---|---|
-| Lines | 7 | 5 | 7 |
-| Columns | 1, full width | 2 | 1, with icon panel |
-| Divider | no | yes | no |
-| LEDs in the top row | free | cost 2 lines (5 → 3) | free |
-| Family | `00 02 04` | both | `00 01 04` |
+| | 0x14 + 0x15 | 0x28 + 0x15 | 0x31 list | 0x15 in the AL family |
+|---|---|---|---|---|
+| Lines | 7 | 7 | 5 | 7 |
+| Columns | 1, full width | list plus icon panel | 2 | 1, with icon panel |
+| Divider | no | no | yes | no |
+| LEDs in the top row | free | free | cost 2 lines (5 → 3) | free |
+| Family | `00 02 04` | `00 02 04` | both | `00 01 04` |
+| Items need field `01` | no | yes | — | yes |
 
-**0x28 + 0x15 in DAW mode is the right choice** for most purposes: 7 full-width
-lines, lights in both button rows, and the DAW-mode CC mapping.
+**0x14 + 0x15 in DAW mode is the right choice** for most purposes: 7 lines
+across the full width, lights in both button rows, the DAW-mode CC mapping, and
+no MIDI pauses when a fader readout is drawn over the list. Use 0x28 with icon
+ids when you want the icon panel. Do not use 0x28 with items that have no
+field `01`.
 
 ## Dead ends
 
@@ -736,7 +835,8 @@ lines, lights in both button rows, and the DAW-mode CC mapping.
 - Family 02 appends on top of an Analog Lab page — ignored.
 - `21 11 40 02 00 <n>` as a mode switch — no effect.
 - `0x15` field 04 as a cursor command — it is field 03.
-- `0x15` field 02 as cursor colour control — swept 0-20, no effect.
+- `0x15` field 02 as cursor colour control — it colours the item's text (first
+  byte: 0 white, anything else blue), not the cursor box.
 - Field 02 of 0x28 set to the list's full length while only the visible items
   are sent — the firmware then computes the cursor in the wrong frame.
 - `00 02 03` LED packets as a way to colour pads in bank D — ignored entirely;
@@ -749,6 +849,12 @@ lines, lights in both button rows, and the DAW-mode CC mapping.
 - "LED id = position in CC measurement order" — the correct formula uses the
   PHYSICAL button order.
 - 0x1C (encoder layout) for the fader readout — worse than 0x1D.
+- Spacing the fader readouts 20 ms apart, or removing the touch echo, to stop
+  the MIDI pauses — the pauses are in the list, see the fader
+  readout section.
+- Drawing the readout, or the whole list, in family `00 01 04` while the
+  keyboard is in DAW mode — nothing is displayed (no list, no readout, no
+  scrolling).
 - Debugging "missing fader updates on screen" — that is capacitive skin
   contact, not protocol.
 
@@ -766,6 +872,9 @@ lines, lights in both button rows, and the DAW-mode CC mapping.
 - Whether the read command `20 09 40` also covers the `03` region, so the whole
   configuration could be dumped without MCC.
 - Whether the popup colour field (0x1E field 04) does anything at all.
+- What the icon ids above 5 look like on the `00 02 04` screen, and what the
+  second byte of the item colour field does.
+- Why the icon field removes the MIDI pauses. Only the correlation is known.
 - Bank B and C's notes are inferred from the pattern (48 and 60), not measured.
 
 ---
