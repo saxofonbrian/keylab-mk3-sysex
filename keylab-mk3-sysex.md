@@ -346,8 +346,8 @@ the list is drawn the way Analog Lab draws its own:
 - title `0x14` (the one-column list, see below) with items that have no field
   `01`.
 
-The combination that pauses is title `0x28` with items **without** field `01` —
-which is what this document used to recommend. Field `03` on the items (the
+The combination that pauses is title `0x28` with items **without** field `01`.
+Field `03` on the items (the
 line index, or `00 00`) makes no difference to the pauses.
 
 **[measured]** Drawing the readout or the list in family `00 01 04` while the
