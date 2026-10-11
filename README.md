@@ -43,6 +43,12 @@ marker before you build on something.
 An Ableton Live set and a Max for Live device that put the protocol to work.
 Setup instructions are below.
 
+## [KeyLabLive](https://github.com/saxofonbrian/KeyLabLive) — the finished script
+
+A complete Ableton Live control surface script built on this protocol, in its
+own repository: a preset list and a song list on the keyboard's screen, up to
+eight tracks, and no Max for Live.
+
 ---
 
 # Proof of concept
