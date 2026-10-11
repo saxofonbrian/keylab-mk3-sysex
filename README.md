@@ -111,9 +111,7 @@ How to tell you are in DAW mode: the screen buttons send CC 45-52 (top row
 **Preferences → Link, Tempo & MIDI → MIDI.**
 
 In the Control Surface table, every row that mentions the KeyLab must be set to
-**None**:
-
-![Control Surface set to None](docs/control-surface-none.png)
+**None**.
 
 Arturia's own control surface script writes track names to the same four
 buttons this POC writes to, and it also sends a *disconnect* when you switch it
