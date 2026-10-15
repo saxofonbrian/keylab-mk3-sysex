@@ -610,6 +610,8 @@ sequence the `00 02 04` list uses. The same title packet works in family `00 02 
 that section.
 
 - **[measured]** There is no refresh packet. A title packet with the count resets the list.
+- **[measured] 13 Oct 2026** (family `00 02 04`): a line shows 34 characters,
+  whatever the characters are. Longer text is cut off, not wrapped.
 - **[measured]** Field `04` overwrites the text **and** changes the icon. Field
   `05` also changes the icon. Neither produces a second text column.
 - **[measured]** Fields `06` and `07` produce only a heading, no item.
@@ -802,8 +804,10 @@ works:
    typographic quotes and dashes replaced, or the character — or the packet —
    is lost.
 
-5. **Text lengths.** Footer labels are cut at 12 characters and list lines at 18
-   in the working rig. Those are chosen, tested values, not measured maxima.
+5. **Text lengths.** Footer labels are cut at 12 characters in the working rig,
+   a chosen, tested value rather than a measured maximum. **[measured] 13 Oct
+   2026:** a line in the one-column `0x14` list shows 34 characters, whatever
+   the characters are; the rest is cut off.
 
 6. **A list changes how the keyboard behaves under a fader readout.**
    **[measured] 11 Oct 2026:** with a title `0x28` list whose items lack field
