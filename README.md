@@ -248,3 +248,9 @@ backwards on short lists.
 Playback uses `cue_points <n> call jump`, not `current_song_time`. That
 property cannot be set: it reads back unchanged whatever the transport is
 doing.
+
+---
+
+## License
+
+MIT — use it, change it, pass it on. See [LICENSE](LICENSE).
