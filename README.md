@@ -10,13 +10,14 @@ measured on hardware, read out of Arturia's own `config.lua`, or logged off the
 wire.
 
 <p>
-  <img src="docs/song-list.jpg" width="49%" alt="KeyLab 88 mk3 screen driven from Ableton Live: a list, coloured screen buttons, lit transport buttons">
-  <img src="docs/preset-list.jpg" width="49%" alt="KeyLab 88 mk3 screen: a one-column list with title, cursor and scrollbar, and a screen button lit yellow">
+  <img src="docs/song-list.jpg" width="32%" alt="KeyLab 88 mk3 screen driven from Ableton Live: a list, coloured screen buttons, lit transport buttons">
+  <img src="docs/preset-list.jpg" width="32%" alt="KeyLab 88 mk3 screen: a one-column list with title, cursor and scrollbar, and a screen button lit yellow">
+  <img src="docs/fader-readout.jpg" width="32%" alt="KeyLab 88 mk3 screen: a fader readout (layout 0x1D) over a one-column list">
 </p>
 
 *Everything on these screens — the lists, the cursor, the button labels and
-colours, the transport lights — is sent from Live with the SysEx documented
-here. The script is [KeyLabLive](https://github.com/saxofonbrian/KeyLabLive).*
+colours, the fader readout, the transport lights — is sent from Live with the
+SysEx documented here. The script is [KeyLabLive](https://github.com/saxofonbrian/KeyLabLive).*
 
 ## [`keylab-mk3-sysex.md`](keylab-mk3-sysex.md) — the reference
 
